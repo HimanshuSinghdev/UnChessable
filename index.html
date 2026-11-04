@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>UnChessable</title>
+<meta name="theme-color" content="#161c2a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<style>
+:root{--bg:#161c2a;--panel:#1d2536;--panel2:#252f45;--line:#33405c;--tx:#e8ebf2;--mu:#8e9ab2;--ac:#d9b45b;--good:#6fbf8e;--bad:#e0645c;
+--lt:#aab6cc;--dk:#4a5d80;--ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+--bs:min(calc(100vh - 110px),calc(100vw - 480px))}
+[data-theme=emerald]{--lt:#cfd8c8;--dk:#5f8a6e}
+[data-theme=wood]{--lt:#ecd2a4;--dk:#a8743f}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 var(--ui)}
+header{display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--line)}
+h1{font:600 26px/1 var(--serif);margin:0 auto 0 0;letter-spacing:.2px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--ac)}button.pri{background:var(--ac);color:#1a1405;border-color:var(--ac);font-weight:600}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.chip{font-size:13px;color:var(--mu);border:1px solid var(--line);border-radius:99px;padding:3px 10px}
+.chip.ok{color:var(--good)}.chip.err{color:var(--bad)}
+main{display:flex;gap:20px;padding:16px 20px;justify-content:center;align-items:flex-start}
+.bw{display:flex;gap:10px}
+#bar{width:26px;height:var(--bs);background:#0e1320;border-radius:5px;position:relative;overflow:hidden;border:1px solid var(--line)}
+#barw{position:absolute;left:0;right:0;bottom:0;height:50%;background:#eceff5;transition:height .35s}
+#barl{position:absolute;left:0;right:0;font-size:11px;text-align:center;font-weight:700;mix-blend-mode:difference;color:#fff}
+#board{width:var(--bs);height:var(--bs);position:relative;touch-action:none;user-select:none;border-radius:4px;overflow:hidden;
+background:repeating-conic-gradient(var(--dk) 0 25%,var(--lt) 0 50%) 0 0/25% 25%;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+#board svg.ly{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#pcs{position:absolute;inset:0}
+.pc{position:absolute;left:0;top:0;width:12.5%;height:12.5%;will-change:transform;cursor:grab}
+.pc svg{width:100%;height:100%;display:block;pointer-events:none}
+.pc.drag{z-index:9;cursor:grabbing;transition:none}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:.9}}.chk{animation:pulse 1.2s infinite}
+aside{width:380px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;max-height:calc(var(--bs) + 4px);overflow:auto}
+#status{font:600 18px/1.25 var(--serif)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tabs button{flex:1;border-radius:0}.tabs button[aria-selected=true]{background:var(--ac);color:#1a1405;font-weight:600}
+#line{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--mu);min-height:3.8em;word-break:break-word}
+#moves{display:grid;grid-template-columns:34px 1fr 1fr;gap:2px;font-size:14px;overflow:auto;min-height:60px}
+#moves span{padding:2px 6px;border-radius:4px}#moves .n{color:var(--mu)}#moves .m{cursor:pointer}#moves .m.cur{background:var(--panel2);outline:1px solid var(--ac)}
+.badge{display:inline-block;min-width:22px;text-align:center;font-size:11px;font-weight:700;border-radius:99px;padding:0 5px;margin-left:6px;color:#101420}
+.c-Brilliant{background:#35c1c8}.c-Best{background:var(--good)}.c-Excellent{background:#9bd17b}.c-Good{background:#b6c3d6}
+.c-Inaccuracy{background:#e6cc5a}.c-Mistake{background:#f0a050}.c-Blunder{background:var(--bad)}
+#graph{width:100%;height:110px;background:#131929;border-radius:6px;cursor:pointer;display:block}
+.acc{display:flex;gap:10px}.acc div{flex:1;background:var(--panel2);border-radius:6px;padding:8px 10px}.acc b{font:600 24px var(--serif);display:block}
+#prog{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden}#prog i{display:block;height:100%;width:0;background:var(--ac)}
+.pv span{display:inline-block;background:var(--panel2);border-radius:4px;padding:1px 7px;margin:2px;cursor:pointer;font-size:13px}.pv span:hover{outline:1px solid var(--ac)}
+dialog{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;width:min(560px,92vw);padding:18px}
+dialog::backdrop{background:rgba(5,8,16,.7)}
+dialog label{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0}
+select,input[type=number],textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+textarea{width:100%;height:150px;font:12px ui-monospace,Menlo,monospace}
+.g{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+#promo{display:flex;gap:8px}#promo button{width:64px;height:64px;padding:2px}#promo svg{width:100%;height:100%}
+[hidden]{display:none!important}
+@media(max-width:900px){:root{--bs:min(calc(100vw - 64px),70vh)}main{flex-direction:column;align-items:center;padding:10px}aside{max-height:none;width:calc(var(--bs) + 36px)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>UnChessable</h1>
+  <span id="eng" class="chip">Engine starting…</span>
+  <button id="bVault">PGN vault</button><button id="bSet">Settings</button>
+</header>
+<main>
+  <div class="bw">
+    <div id="bar" title="Evaluation"><div id="barw"></div><span id="barl">0.0</span></div>
+    <div id="board" role="application" aria-label="Chess board"><svg class="ly" id="under" viewBox="0 0 800 800"></svg><div id="pcs"></div><svg class="ly" id="over" viewBox="0 0 800 800"></svg></div>
+  </div>
+  <aside>
+    <div id="status">Your move</div>
+    <div class="row tabs" role="tablist"><button id="tPlay" role="tab" aria-selected="true">Play</button><button id="tRev" role="tab" aria-selected="false">Review</button></div>
+    <section id="pPlay" class="row" style="flex-direction:column;align-items:stretch">
+      <div class="row">
+        <select id="side" aria-label="Your colour"><option value="w">Play White</option><option value="b">Play Black</option></select>
+        <button id="bNew" class="pri">New game</button><button id="bUndo">Undo</button><button id="bFlip">Flip</button><button id="bHint">Hint</button>
+      </div>
+      <div id="line"></div>
+    </section>
+    <section id="pRev" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div id="prog" hidden><i></i></div>
+      <div class="acc"><div>White accuracy<b id="accW">–</b></div><div>Black accuracy<b id="accB">–</b></div></div>
+      <svg id="graph" viewBox="0 0 400 110" preserveAspectRatio="none"></svg>
+      <div class="row"><button id="bBest">Best line</button><button id="bWhy">Why is this a mistake?</button><span id="mvInfo" class="chip"></span></div>
+      <div class="pv" id="pv"></div>
+    </section>
+    <div id="moves"></div>
+    <div class="row"><button id="bRun" class="pri">Review this game</button></div>
+  </aside>
+</main>
+
+<dialog id="dSet"><form method="dialog">
+  <h2 style="font-family:var(--serif);margin-top:0">Settings</h2>
+  <label>Board<select id="sTheme"><option value="midnight">Midnight dark</option><option value="emerald">Emerald slate</option><option value="wood">Warm wood</option></select></label>
+  <label>Engine move time<select id="sTime"><option value="500">0.5 s</option><option value="1500">1.5 s</option><option value="4000">4 s</option><option value="10000">10 s</option></select></label>
+  <label>Hash<select id="sHash"><option>32</option><option>64</option><option>128</option><option>256</option></select></label>
+  <label>Threads <input id="sThr" type="number" min="1" max="32" style="width:70px"></label>
+  <label>Review depth<select id="sDepth"><option>12</option><option>14</option><option>16</option><option>18</option></select></label>
+  <label>Pondering<input id="sPonder" type="checkbox"></label>
+  <label>Sound<input id="sSound" type="checkbox"></label>
+  <p id="sNote" style="color:var(--mu);font-size:13px"></p>
+  <button class="pri" value="ok">Done</button>
+</form></dialog>
+
+<dialog id="dVault"><form method="dialog">
+  <h2 style="font-family:var(--serif);margin-top:0">PGN vault</h2>
+  <textarea id="vText" placeholder="Paste a PGN or FEN here"></textarea>
+  <div class="row" style="margin:8px 0"><button type="button" id="vImp" class="pri">Import</button><button type="button" id="vPgn">Copy PGN</button><button type="button" id="vFen">Copy FEN</button><button value="x">Close</button></div>
+  <div id="vList" style="max-height:220px;overflow:auto"></div>
+</form></dialog>
+
+<dialog id="dPromo"><form method="dialog"><div id="promo"></div></form></dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>
