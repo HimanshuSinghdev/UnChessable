@@ -4,8 +4,10 @@ const $=s=>document.querySelector(s), sleep=ms=>new Promise(r=>setTimeout(r,ms))
 const NS='http://www.w3.org/2000/svg';
 
 /* ---------- settings ---------- */
-const DEF={theme:'midnight',time:1500,hash:64,thr:Math.min(navigator.hardwareConcurrency||2,8),depth:14,ponder:true,sound:true};
-const set={...DEF,...JSON.parse(localStorage.getItem('uc.set')||'{}')};
+const DEF={theme:'wood',pieces:'merida',time:3000,hash:64,thr:Math.min(navigator.hardwareConcurrency||2,8),depth:14,ponder:true,sound:true};
+const set={...DEF,...(()=>{try{return JSON.parse(localStorage.getItem('uc.set')||'{}')}catch{return{}}})()};
+/* v2: old saved settings had a 1.5 s move time and no piece choice; give them the stronger default once */
+if(set.v!==2){set.v=2;if(set.time<3000)set.time=3000;if(!set.pieces)set.pieces='merida'}
 const saveSet=()=>{try{localStorage.setItem('uc.set',JSON.stringify(set))}catch{}};
 
 /* ---------- IndexedDB (eval cache + vault) ---------- */
@@ -21,14 +23,14 @@ function sfx(k){if(!set.sound)return;try{ctx().resume();
  if(k==='move')thud(.9,1400,.07);else if(k==='cap'){thud(1.6,700,.14)}else if(k==='check'){thud(.9,1200,.07);tone(1320,.06,.25,.15);tone(1760,.12,.3,.1)}
  else if(k==='end'){[392,494,587,784].forEach((f,i)=>tone(f,i*.07,1.1,.12,'triangle'))}}catch{}}
 
-/* ---------- pieces (inline SVG) ---------- */
-const PATH={p:'<circle cx="22.5" cy="12" r="5"/><path d="M16 33c0-9 3-12 6.500-14 3.500 2 6.500 5 6.500 14z"/>',
-r:'<path d="M11 36v-3l3-3V17h-3v-6h5v3h4v-3h4v3h4v-3h5v6h-3v13l3 3v3z"/>',
-n:'<path d="M13 36c0-9 3-13 7-18l-3-2 3-7 3 3c8 2 11 9 11 24z"/><circle cx="21" cy="15" r="1.200" class="eye"/>',
-b:'<circle cx="22.500" cy="9" r="3.200"/><path d="M22.500 13c-7 4-8 10-6 15l-4 8h21l-4-8c2-5 1-11-7-15z"/><path d="M19 22h7M22.500 19v6" class="eye"/>',
-q:'<path d="M9 36 7 15l7 8 3-11 5.500 11L28 12l3 11 7-8-2 21z"/><circle cx="7" cy="14" r="2.200"/><circle cx="14" cy="10" r="2.200"/><circle cx="22.500" cy="8" r="2.200"/><circle cx="31" cy="10" r="2.200"/><circle cx="38" cy="14" r="2.200"/>',
-k:'<path d="M21 4h3v3h3v3h-3v3h-3v-3h-3V7h3z"/><path d="M11 36c-4-9 1-20 11.500-20S38 27 34 36z"/>'};
-const pieceSVG=(t,c)=>`<svg viewBox="0 0 45 45" fill="${c==='w'?'#f4efe3':'#3a4263'}" stroke="${c==='w'?'#20263a':'#0a0d16'}" stroke-width="1.5" stroke-linejoin="round"><style>.eye{stroke:${c==='w'?'#20263a':'#c9cfdf'};fill:none;stroke-width:1.400}</style>${PATH[t]}<path d="M10 39h25" stroke-width="2.500" stroke-linecap="round"/></svg>`;
+/* ---------- pieces (SVG files in /pieces, shown as CSS backgrounds) ---------- */
+const PIECE_SETS={merida:'Staunton',cburnett:'Classic'};
+const PKEYS=['wK','wQ','wR','wB','wN','wP','bK','bQ','bR','bB','bN','bP'];
+const pieceKey=(t,c)=>c+t.toUpperCase();
+function applyPieces(){const s=PIECE_SETS[set.pieces]?set.pieces:'merida';let st=document.getElementById('pcStyle');
+ if(!st){st=document.createElement('style');st.id='pcStyle';document.head.append(st)}
+ st.textContent=PKEYS.map(k=>`[data-p=${k}]{background-image:url("pieces/${s}/${k}.svg")}`).join('');
+ for(const k of PKEYS){const i=new Image();i.src=`pieces/${s}/${k}.svg`}}
 
 /* ---------- opening book (SAN lines → trie lookup) ---------- */
 const BOOK=`e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6 c3 O-O h3
@@ -68,37 +70,52 @@ const scoreNum=s=>s.mate!=null?Math.sign(s.mate)*(30000-Math.abs(s.mate)):s.cp;
 function parseInfo(l){const t=l.split(' '),o={},g=k=>{const i=t.indexOf(k);return i<0?null:t[i+1]};
  o.depth=+g('depth');o.mpv=+(g('multipv')||1);const i=t.indexOf('score');if(i>=0){o.score=t[i+1]==='mate'?{mate:+t[i+2]}:{cp:+t[i+2]}}
  const p=t.indexOf('pv');o.pv=p>=0?t.slice(p+1):[];o.nps=+g('nps')||0;return o}
+const BM=/^bestmove (\S+)(?: ponder (\S+))?/;
 class Engine{
- constructor(){this.waiters=[];this.pond=null;this.stm='w';this.onInfo=()=>{};this.lastInfo=null;this.name='';this.threads=1}
- send(s){this.w.postMessage(s)}
- wait(re){return new Promise(r=>this.waiters.push([re,r]))}
- line(l){l=String(l);this.waiters=this.waiters.filter(([re,r])=>{const m=l.match(re);if(m){r(m);return false}return true});
-  if(l.startsWith('info')&&l.includes(' pv ')&&!this.pond){const i=parseInfo(l);if(i.score){this.lastInfo=i;this.onInfo(i,this.stm)}}}
- async start(){const c=[];if(self.crossOriginIsolated&&typeof SharedArrayBuffer!=='undefined')c.push('stockfish-19-lite.js');c.push('stockfish-19-lite-single.js','stockfish-19-asm.js');
-  for(const f of c){try{await this.spawn('engine/'+f);this.name=f;this.threads=f==='stockfish-19-lite.js'?set.thr:1;await this.options();return f}catch(e){console.warn('engine fail',f,e);try{this.w.terminate()}catch{}}}
+ constructor(){this.waiters=[];this.pond=null;this.quiet=false;this.stm='w';this.onInfo=()=>{};this.lastInfo=null;this.name='';this.threads=1;this.ok=false;this.w=null;this.rp=null}
+ send(s){if(!this.w)throw new Error('engine not started');this.w.postMessage(s)}
+ /* every wait has a timeout, so a dead worker can never leave the game hanging */
+ wait(re,ms=0){return new Promise((res,rej)=>{const e={re,res,rej,t:0};if(ms)e.t=setTimeout(()=>{this.waiters=this.waiters.filter(x=>x!==e);rej(new Error('engine timeout'))},ms);this.waiters.push(e)})}
+ failAll(err){const w=this.waiters;this.waiters=[];for(const e of w){clearTimeout(e.t);e.rej(err)}}
+ line(l){l=String(l);for(const e of this.waiters.slice()){const m=l.match(e.re);if(m){this.waiters=this.waiters.filter(x=>x!==e);clearTimeout(e.t);e.res(m)}}
+  if(!this.quiet&&l.startsWith('info')&&l.includes(' pv ')){const i=parseInfo(l);if(i.score){this.lastInfo=i;this.onInfo(i,this.stm)}}}
+ async start(){this.ok=false;const c=[];if(self.crossOriginIsolated&&typeof SharedArrayBuffer!=='undefined')c.push('stockfish-19-lite.js');c.push('stockfish-19-lite-single.js','stockfish-19-asm.js');
+  for(const f of c){try{await this.spawn('engine/'+f);this.name=f;this.threads=f==='stockfish-19-lite.js'?set.thr:1;await this.options();this.ok=true;return f}catch(e){console.warn('engine fail',f,e);try{this.w.terminate()}catch{}}}
   throw new Error('No engine could start')}
- spawn(url){return new Promise((res,rej)=>{const w=this.w=new Worker(url);const t=setTimeout(()=>rej(new Error('timeout')),20000);
-  w.onerror=e=>{clearTimeout(t);rej(e);this.crash&&this.crash()};w.onmessage=e=>this.line(e.data);
-  this.wait(/^uciok/).then(()=>{this.send('isready');return this.wait(/^readyok/)}).then(()=>{clearTimeout(t);res()});this.send('uci')})}
- async options(){this.send('setoption name Skill Level value 20');this.send(`setoption name Hash value ${set.hash}`);
-  this.send(`setoption name Threads value ${this.threads}`);this.send('setoption name Ponder value true');this.send('setoption name UCI_ShowWDL value false');this.send('isready');await this.wait(/^readyok/)}
+ async spawn(url){const w=this.w=new Worker(url);w.onmessage=e=>this.line(e.data);
+  w.onerror=e=>{this.ok=false;this.failAll(new Error(e.message||'engine worker error'))};
+  let p=this.wait(/^uciok/,20000);this.send('uci');await p;p=this.wait(/^readyok/,20000);this.send('isready');await p}
+ async options(){for(const[k,v]of[['Skill Level',20],['UCI_LimitStrength','false'],['MultiPV',1],['Hash',set.hash],['Threads',this.threads],['Move Overhead',20],['Ponder','true']])this.send(`setoption name ${k} value ${v}`);
+  const p=this.wait(/^readyok/,20000);this.send('isready');await p}
+ async fresh(){await this.stopPonder();this.send('ucinewgame');const p=this.wait(/^readyok/,10000);this.send('isready');await p}
  pos(fen,moves){return `position fen ${fen}${moves.length?' moves '+moves.join(' '):''}`}
- async stop(){if(this.pond){this.pond=null;const p=this.wait(/^bestmove/);this.send('stop');await p}}
+ /* Pondering. The engine may finish a ponder search by itself (e.g. it found a forced mate) and print its
+    bestmove before we ever send ponderhit/stop, so that bestmove is captured here instead of being waited for later. */
+ ponder(fen,moves,pm,mt){const mv=[...moves,pm],pd={key:mv.join(' '),done:false,best:null,ponder:null};this.pond=pd;this.quiet=true;
+  pd.p=this.wait(BM).then(m=>{pd.done=true;pd.best=m[1];pd.ponder=m[2]},()=>{pd.done=true});
+  this.send(this.pos(fen,mv));this.send(`go ponder movetime ${mt}`)}
+ async stopPonder(){const pd=this.pond;if(!pd)return;this.pond=null;
+  try{if(!pd.done){this.send('stop');await Promise.race([pd.p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('engine timeout')),4000))])}}
+  finally{this.quiet=false}}
+ stop(){return this.stopPonder()}
  async think(fen,moves,mt){this.stm=moves.length%2===0?fen.split(' ')[1]:(fen.split(' ')[1]==='w'?'b':'w');
-  const re=/^bestmove (\S+)(?: ponder (\S+))?/;let p;
-  if(this.pond){const q=this.pond;this.pond=null;if(q.key===moves.join(' ')){p=this.wait(re);this.send('ponderhit');const m=await p;return{best:m[1],ponder:m[2]}}
-   const w=this.wait(/^bestmove/);this.send('stop');await w}
-  p=this.wait(re);this.send(this.pos(fen,moves));this.send(`go movetime ${mt}`);const m=await p;return{best:m[1],ponder:m[2]}}
- ponder(fen,moves,pm,mt){this.pond={key:[...moves,pm].join(' ')};this.send(this.pos(fen,[...moves,pm]));this.send(`go ponder movetime ${mt}`)}
- async analyze(fen,depth){await this.stop();this.stm=fen.split(' ')[1];this.lastInfo=null;const p=this.wait(/^bestmove (\S+)/);this.send(`position fen ${fen}`);this.send(`go depth ${depth}`);const m=await p;
+  const pd=this.pond;
+  if(pd){
+   if(pd.key===moves.join(' ')){ /* you played the predicted move: keep the ponder search going */
+    this.pond=null;this.quiet=false;
+    if(pd.done){if(pd.best&&pd.best!=='(none)')return{best:pd.best,ponder:pd.ponder}}
+    else{const p=this.wait(BM,mt+6000);this.send('ponderhit');const m=await p;return{best:m[1],ponder:m[2]}}
+   }else await this.stopPonder()}
+  this.lastInfo=null;this.quiet=false;const p=this.wait(BM,mt+6000);this.send(this.pos(fen,moves));this.send(`go movetime ${mt}`);const m=await p;return{best:m[1],ponder:m[2]}}
+ async analyze(fen,depth){await this.stopPonder();this.stm=fen.split(' ')[1];this.lastInfo=null;const p=this.wait(/^bestmove (\S+)/,120000);this.send(`position fen ${fen}`);this.send(`go depth ${depth}`);const m=await p;
   const i=this.lastInfo;return{best:m[1]==='(none)'?null:m[1],cp:i?scoreNum(i.score):0,pv:i?i.pv:[],depth}}
- async restart(){try{this.w.terminate()}catch{};this.waiters=[];this.pond=null;await this.start()}
+ restart(){return this.rp||(this.rp=(async()=>{try{this.w&&this.w.terminate()}catch{};this.failAll(new Error('engine restarted'));this.pond=null;this.quiet=false;this.ok=false;try{await this.start()}finally{this.rp=null}})())}
 }
 const eng=new Engine();
 
 /* ---------- state ---------- */
-let bootP=Promise.resolve();
-const S={gid:0,task:null,chess:new Chess(),startFen:START,orient:'w',human:'w',busy:false,mode:'play',sel:null,ann:{arrows:[],sq:[]},hint:null,rv:null,ply:0,branch:null,drag:null};
+let bootDone;let bootP=new Promise(r=>bootDone=r);
+const S={gid:0,task:null,thinking:false,chess:new Chess(),startFen:START,orient:'w',human:'w',busy:false,mode:'play',sel:null,ann:{arrows:[],sq:[]},hint:null,rv:null,ply:0,branch:null,drag:null};
 const ucis=()=>S.chess.history({verbose:true}).map(m=>m.from+m.to+(m.promotion||''));
 const sqXY=sq=>{const f=sq.charCodeAt(0)-97,r=+sq[1]-1;return S.orient==='w'?[f,7-r]:[7-f,r]};
 const xySq=(x,y)=>{const f=S.orient==='w'?x:7-x,r=S.orient==='w'?7-y:y;return String.fromCharCode(97+f)+(r+1)};
@@ -126,12 +143,12 @@ function render(){
  for(let i=0;i<8;i++){const t=document.createElementNS(NS,'text'),u=document.createElementNS(NS,'text');
   t.textContent=S.orient==='w'?8-i:i+1;t.setAttribute('x',6);t.setAttribute('y',i*100+22);u.textContent=String.fromCharCode(97+(S.orient==='w'?i:7-i));u.setAttribute('x',i*100+84);u.setAttribute('y',792);
   t.setAttribute('fill',cv(i%2===0?'--dk':'--lt'));u.setAttribute('fill',cv(i%2===0?'--lt':'--dk'));for(const e of[t,u]){e.setAttribute('font-size',20);e.setAttribute('font-weight',700);under.append(e)}}
- for(const p of ch.board().flat()){if(!p)continue;const d=document.createElement('div'),[x,y]=sqXY(p.square);d.className='pc';d.dataset.sq=p.square;d.dataset.c=p.color;d.style.transform=`translate3d(${x*100}%,${y*100}%,0)`;d.innerHTML=pieceSVG(p.type,p.color);pcs.append(d)}
+ for(const p of ch.board().flat()){if(!p)continue;const d=document.createElement('div'),[x,y]=sqXY(p.square);d.className='pc';d.dataset.sq=p.square;d.dataset.c=p.color;d.style.transform=`translate3d(${x*100}%,${y*100}%,0)`;d.dataset.p=pieceKey(p.type,p.color);pcs.append(d)}
  S.ann.arrows.forEach(a=>over.append(arrow(a.from,a.to,ACOL[a.c])));
  if(S.hint)over.append(arrow(S.hint.slice(0,2),S.hint.slice(2,4),'#6fbf8e',.8));
  if(S.mode==='review'&&S.rv&&!S.branch){const e=S.rv.ev[S.ply];if(e&&e.best)over.append(arrow(e.best.slice(0,2),e.best.slice(2,4),'#6fbf8e',.7));
 }
- if(S.mode==='play')drawMoves();else drawReview();
+ if(S.mode==='play')drawMoves();else drawReview();updateGo();
 }
 function setBar(cp,mate){const p=mate!=null?(cp>0?100:0):wpct(cp),l=$('#barl');$('#barw').style.height=p+'%';l.textContent=fmtScore(cp,mate);const top=cp<0;l.style.top=top?'4px':'auto';l.style.bottom=top?'auto':'4px'}
 function drawMoves(){const h=S.chess.history();let o='';for(let i=0;i<h.length;i+=2)o+=`<span class="n">${i/2+1}.</span><span>${h[i]}</span><span>${h[i+1]||''}</span>`;$('#moves').innerHTML=o;$('#moves').scrollTop=1e6}
@@ -140,33 +157,60 @@ function gameStatus(){const c=S.chess;if(c.isCheckmate())return(c.turn()==='w'?'
 
 /* ---------- play ---------- */
 async function afterMove(m,animate){
- S.hint=null;S.sel=null;S.ann={arrows:[],sq:[]};
- if(animate){const el=$(`#pcs [data-sq=${m.from}]`);if(el){const [x,y]=sqXY(m.to);el.style.transition='transform .18s ease-out';el.style.zIndex=5;el.style.transform=`translate3d(${x*100}%,${y*100}%,0)`;await sleep(190)}}
+ S.hint=null;S.sel=null;S.ann={arrows:[],sq:[]};S.rv=null;
+ if(animate){const legs=[[m.from,m.to]];if(m.flags.includes('k')||m.flags.includes('q')){const r=m.color==='w'?1:8,ks=m.flags.includes('k');legs.push([(ks?'h':'a')+r,(ks?'f':'d')+r])}
+  let any=false;for(const[a,b]of legs){const el=$(`#pcs [data-sq=${a}]`);if(el){const[x,y]=sqXY(b);el.style.transition='transform .18s ease-out';el.style.zIndex=5;el.style.transform=`translate3d(${x*100}%,${y*100}%,0)`;any=true}}
+  if(any)await sleep(190)}
  render();const over=gameStatus();sfx(over?'end':S.chess.inCheck()?'check':m.captured?'cap':'move');
- if(over){status(over);S.busy=false;saveGame();$('#bRun').classList.add('pri');return true}
+ if(over){status(over);S.busy=false;S.thinking=false;saveGame();$('#bRun').classList.add('pri');updateGo();return true}
  status(S.chess.turn()===S.human?'Your move':'Engine is thinking…');return false}
-const startEngine=()=>{S.task=engineTurn()};
+const startEngine=()=>{if(S.thinking)return;S.task=engineTurn()};
+const engineToMove=()=>S.mode==='play'&&!S.busy&&!S.chess.isGameOver()&&S.chess.turn()!==S.human;
+function updateGo(){const b=$('#bGo');if(b)b.hidden=!engineToMove()}
+function maybeEngine(){if(engineToMove())startEngine();updateGo()}
 async function tryMove(from,to,promo){
  if(S.busy||S.mode!=='play'||S.chess.turn()!==S.human)return false;
  const legal=S.chess.moves({square:from,verbose:true}).filter(m=>m.to===to);if(!legal.length)return false;
  if(legal[0].promotion&&!promo){promo=await askPromo();if(!promo)return false}
  let m;try{m=S.chess.move({from,to,promotion:promo})}catch{return false}
  S.busy=true;const done=await afterMove(m,false);if(!done)startEngine();return true}
-async function engineTurn(retry=1){
- S.busy=true;status('Engine is thinking…');const gid=S.gid;
- try{await bootP;const hist=S.chess.history();let uci=S.startFen===START?bookMove(hist):null,ponder;
+async function engineTurn(attempt=0){
+ const gid=S.gid;S.busy=true;S.thinking=true;status('Engine is thinking…');updateGo();
+ try{await bootP;if(eng.rp){try{await eng.rp}catch{}}if(gid!==S.gid)return;if(!eng.ok)throw new Error('engine not ready');
+  const hist=S.chess.history();let uci=S.startFen===START?bookMove(hist):null,ponder;
   if(uci)await sleep(450);else{const r=await eng.think(S.startFen,ucis(),set.time);uci=r.best;ponder=r.ponder}
-  if(gid!==S.gid)return;if(uci==='(none)'||!uci){S.busy=false;return}
-  const m=S.chess.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]});
-  const done=await afterMove(m,true);if(gid!==S.gid)return;S.busy=false;
-  if(!done&&set.ponder&&ponder)eng.ponder(S.startFen,ucis(),ponder,set.time)}
- catch(e){console.error(e);if(retry>0){setChip('Engine crashed — restarting…','err');try{await eng.restart();setChip(engLabel(),'ok')}catch{setChip('Engine unavailable','err');S.busy=false;return}return engineTurn(retry-1)}S.busy=false}}
-function askPromo(){return new Promise(res=>{const d=$('#dPromo'),p=$('#promo');p.innerHTML='';for(const t of['q','r','b','n']){const b=document.createElement('button');b.type='button';b.innerHTML=pieceSVG(t,S.human);b.onclick=()=>{d.close();res(t)};p.append(b)}d.onclose=()=>res(null);d.showModal()})}
+  if(gid!==S.gid)return;
+  if(!uci||uci==='(none)'){S.busy=false;S.thinking=false;status(gameStatus()||'The engine has no legal move');updateGo();return}
+  let m;try{m=S.chess.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]})}catch{throw new Error('illegal engine move '+uci)}
+  S.thinking=false;const done=await afterMove(m,true);if(gid!==S.gid)return;S.busy=false;updateGo();
+  if(!done&&set.ponder&&ponder){try{eng.ponder(S.startFen,ucis(),ponder,set.time)}catch{}}}
+ catch(e){if(gid!==S.gid)return;console.error(e);S.thinking=false;
+  if(attempt<2){setChip('Engine stalled, restarting…','err');try{await eng.restart();setChip(engLabel(),'ok')}catch{setChip('Engine unavailable','err');S.busy=false;status('The engine could not restart. Tap Engine move to try again.');updateGo();return}
+   if(gid!==S.gid)return;return engineTurn(attempt+1)}
+  S.busy=false;status('The engine stopped responding. Tap Engine move to try again.');updateGo()}}
+function askPromo(){return new Promise(res=>{const d=$('#dPromo'),p=$('#promo');p.innerHTML='';for(const t of['q','r','b','n']){const b=document.createElement('button');b.type='button';b.setAttribute('aria-label',{q:'Queen',r:'Rook',b:'Bishop',n:'Knight'}[t]);b.innerHTML=`<div class="pi" data-p="${pieceKey(t,S.human)}"></div>`;b.onclick=()=>{d.close();res(t)};p.append(b)}d.onclose=()=>res(null);d.showModal()})}
+async function cancelEngine(){S.gid++;const t=S.task;
+ if(S.thinking){try{eng.send('stop')}catch{}
+  if(t){const ok=await Promise.race([t.then(()=>1,()=>1),sleep(1500).then(()=>0)]);if(!ok){try{await eng.restart()}catch{}}}}
+ S.thinking=false;S.busy=false}
 async function newGame(fen=START,chess=null){
- S.gid++;if(S.busy){try{eng.send('stop')}catch{}await S.task}await bootP;await eng.stop();S.chess=chess||new Chess(fen);S.startFen=chess?(chess.getHeaders().FEN||START):fen;S.human=$('#side').value;S.orient=S.human;S.mode='play';S.rv=null;S.branch=null;S.busy=false;S.sel=null;S.hint=null;S.ann={arrows:[],sq:[]};
- showTab('play');$('#bRun').classList.remove('pri');setBar(0);render();status(S.chess.turn()===S.human?'Your move':'Engine is thinking…');if(S.chess.turn()!==S.human&&!S.chess.isGameOver())startEngine()}
-async function undo(){if(S.busy||S.mode!=='play')return;await eng.stop();const n=S.chess.turn()===S.human?2:1;for(let i=0;i<n;i++)S.chess.undo();S.hint=null;render();status('Your move')}
-async function hint(){if(S.busy||S.chess.isGameOver())return;S.busy=true;try{await eng.stop();const r=await eng.analyze(S.chess.fen(),12);S.hint=r.best}finally{S.busy=false}render()}
+ S.busy=true;await cancelEngine();S.busy=true;await bootP;   // input stays locked until the new position is in placetry{await eng.stop();if(eng.ok)await eng.fresh()}catch{}
+ S.chess=chess||new Chess(fen);S.startFen=chess?(chess.getHeaders().FEN||START):fen;S.human=$('#side').value;S.orient=S.human;S.mode='play';S.rv=null;S.branch=null;S.busy=false;S.thinking=false;S.sel=null;S.hint=null;S.ann={arrows:[],sq:[]};
+ showTab('play');$('#bRun').classList.remove('pri');$('#line').textContent='';setBar(0);render();status(S.chess.turn()===S.human?'Your move':'Engine is thinking…');maybeEngine()}
+async function undo(){
+ if(S.mode!=='play'||(S.busy&&!S.thinking))return;
+ await cancelEngine();try{await eng.stop()}catch{}
+ const c=S.chess,h=c.history().length,k=c.turn()===S.human?2:1;   // take back to the last position where it is your move
+ if(h<k){status(h?'Nothing more to take back':'Nothing to take back');maybeEngine();return}
+ for(let i=0;i<k;i++)c.undo();
+ S.hint=null;S.sel=null;S.rv=null;S.ann={arrows:[],sq:[]};$('#bRun').classList.remove('pri');$('#line').textContent='';setBar(0);render();status('Your move');maybeEngine()}
+async function hint(){
+ if(S.busy||S.mode!=='play'||S.chess.isGameOver()||S.chess.turn()!==S.human)return;
+ S.busy=true;status('Looking for a hint…');
+ try{await bootP;await eng.stop();const r=await eng.analyze(S.chess.fen(),12);S.hint=r.best}
+ catch(e){console.error(e);try{await eng.restart()}catch{}}
+ finally{S.busy=false}
+ render();status('Your move')}
 function saveGame(){const c=S.chess;if(!c.history().length)return;c.setHeader('White',S.human==='w'?'You':'UnChessable');c.setHeader('Black',S.human==='b'?'You':'UnChessable');c.setHeader('Date',new Date().toISOString().slice(0,10).replace(/-/g,'.'));
  const r=c.isCheckmate()?(c.turn()==='w'?'0-1':'1-0'):'1/2-1/2';c.setHeader('Result',r);db('games','readwrite',s=>s.put({id:Date.now(),pgn:c.pgn(),date:Date.now(),white:S.human==='w'?'You':'UnChessable',black:S.human==='b'?'You':'UnChessable',result:r}))}
 
@@ -205,9 +249,9 @@ async function evalFen(fen,depth){const key=fen+'|'+depth;const hit=await db('ev
  const c=new Chess(fen);let r;if(c.isCheckmate())r={best:null,cp:-30000,pv:[],depth};else if(c.isDraw()||c.isStalemate())r={best:null,cp:0,pv:[],depth};else r=await eng.analyze(fen,depth);
  db('evals','readwrite',s=>s.put(r,key));return r}
 async function runReview(){
- if(S.busy)return;const hist=S.chess.history({verbose:true});if(!hist.length)return status('Play or import a game first');
- await bootP;await eng.stop();S.busy=true;showTab('rev');$('#prog').hidden=false;const bar=$('#prog i'),fens=[hist[0].before,...hist.map(h=>h.after)],ev=[];status('Analysing…');
- for(let i=0;i<fens.length;i++){ev.push(await evalFen(fens[i],set.depth));bar.style.width=((i+1)/fens.length*100)+'%';await sleep(0)}
+ if(S.busy&&!S.thinking)return;const hist=S.chess.history({verbose:true});if(!hist.length)return status('Play or import a game first');
+ await cancelEngine();await bootP;try{await eng.stop()}catch{}S.busy=true;showTab('rev');$('#prog').hidden=false;const bar=$('#prog i'),fens=[hist[0].before,...hist.map(h=>h.after)],ev=[];status('Analysing…');
+ try{for(let i=0;i<fens.length;i++){ev.push(await evalFen(fens[i],set.depth));bar.style.width=((i+1)/fens.length*100)+'%';await sleep(0)}}catch(e){console.error(e);S.busy=false;$('#prog').hidden=true;showTab('play');status('Analysis stopped. The engine was restarted, try again.');try{await eng.restart()}catch{}return}
  const u=hist.map(m=>m.from+m.to+(m.promotion||'')),cls=[],acc={w:[],b:[]};
  for(let i=0;i<hist.length;i++){const a=ev[i],b=ev[i+1],mv=hist[i].color;let best=clamp(a.cp),played=clamp(-b.cp);let cpl=u[i]===a.best?0:Math.max(0,best-played);if(u[i]===a.best)played=best;
   const drop=Math.max(0,wpct(best)-wpct(played));let name;
@@ -240,15 +284,15 @@ addEventListener('keydown',e=>{if(S.mode!=='review'||/INPUT|TEXTAREA|SELECT/.tes
  if(e.key==='ArrowLeft'){goPly(S.ply-1);e.preventDefault()}else if(e.key==='ArrowRight'){goPly(S.ply+1);e.preventDefault()}else if(e.key==='Home')goPly(0);else if(e.key==='End')goPly(1e4)});
 function showTab(t){const rv=t==='rev';$('#pPlay').hidden=rv;$('#pRev').hidden=!rv;$('#tPlay').setAttribute('aria-selected',!rv);$('#tRev').setAttribute('aria-selected',rv);
  if(rv){if(S.rv){S.mode='review';render()}}else{S.mode='play';S.branch=null;render();status(gameStatus()||(S.chess.turn()===S.human?'Your move':'Engine is thinking…'))}}
-$('#tPlay').onclick=()=>showTab('play');$('#tRev').onclick=()=>S.rv?showTab('rev'):runReview();
+$('#tPlay').onclick=()=>{showTab('play');maybeEngine()};$('#tRev').onclick=()=>S.rv?showTab('rev'):runReview();
 
 /* ---------- vault ---------- */
 async function drawVault(){const all=(await db('games','readonly',s=>s.getAll()))||[];$('#vList').innerHTML=all.sort((a,b)=>b.id-a.id).map(g=>`<div class="g"><span>${new Date(g.date).toLocaleDateString()} · ${g.white} vs ${g.black} · ${g.result}</span><span><button type="button" data-l="${g.id}">Review</button> <button type="button" data-d="${g.id}">Delete</button></span></div>`).join('')||'<p style="color:var(--mu)">No saved games yet. Finished games are saved here automatically.</p>';
  $('#vList').onclick=async e=>{const l=e.target.dataset.l,d=e.target.dataset.d;if(d){await db('games','readwrite',s=>s.delete(+d));drawVault()}
   if(l){const g=await db('games','readonly',s=>s.get(+l));loadPgnText(g.pgn);$('#dVault').close()}}}
-function loadPgnText(t){const c=new Chess();try{c.loadPgn(t)}catch{try{c.load(t.trim())}catch{return alert('Could not read that PGN or FEN.')}
+async function loadPgnText(t){const c=new Chess();try{c.loadPgn(t)}catch{try{c.load(t.trim())}catch{return alert('Could not read that PGN or FEN.')}
   if(!c.history().length)return newGame(c.fen())}
- S.chess=c;S.startFen=c.getHeaders().FEN||START;S.rv=null;S.human='w';S.orient='w';runReview()}
+ await cancelEngine(); S.chess=c;S.startFen=c.getHeaders().FEN||START;S.rv=null;S.human='w';S.orient='w';runReview()}
 $('#bVault').onclick=()=>{drawVault();$('#dVault').showModal()};
 $('#vImp').onclick=()=>{const t=$('#vText').value.trim();if(!t)return;$('#dVault').close();if(/^[rnbqkpRNBQKP1-8\/]+ [wb] /.test(t)){const c=new Chess();try{c.load(t)}catch{return alert('Invalid FEN')}newGame(c.fen())}else loadPgnText(t)};
 const copy=async t=>{try{await navigator.clipboard.writeText(t)}catch{$('#vText').value=t;$('#vText').select();document.execCommand('copy')}};
@@ -257,18 +301,19 @@ $('#vPgn').onclick=()=>copy(S.chess.pgn());$('#vFen').onclick=()=>copy(S.chess.f
 /* ---------- controls & settings ---------- */
 $('#bNew').onclick=()=>newGame();$('#bUndo').onclick=undo;$('#bHint').onclick=hint;$('#bRun').onclick=runReview;
 $('#bFlip').onclick=()=>{S.orient=S.orient==='w'?'b':'w';render()};
-const sets={sTheme:'theme',sTime:'time',sHash:'hash',sThr:'thr',sDepth:'depth'};
+const sets={sTheme:'theme',sPieces:'pieces',sTime:'time',sHash:'hash',sThr:'thr',sDepth:'depth'};
 function applyTheme(){document.documentElement.dataset.theme=set.theme}
 $('#bSet').onclick=()=>{for(const[id,k]of Object.entries(sets))$('#'+id).value=set[k];$('#sPonder').checked=set.ponder;$('#sSound').checked=set.sound;
  $('#sNote').textContent=self.crossOriginIsolated?`Multi-threaded engine active (${eng.name}).`:`Single-threaded mode: ${eng.name}. Threads need cross-origin isolation (works after the service worker installs and the page reloads).`;$('#dSet').showModal()};
-$('#dSet').addEventListener('close',async()=>{for(const[id,k]of Object.entries(sets))set[k]=typeof DEF[k]==='number'?+$('#'+id).value:$('#'+id).value;set.ponder=$('#sPonder').checked;set.sound=$('#sSound').checked;saveSet();applyTheme();
- if(!set.ponder)await eng.stop();if(!S.busy&&eng.w){eng.threads=eng.name==='stockfish-19-lite.js'?set.thr:1;try{await eng.stop();await eng.options()}catch{}}render()});
+$('#dSet').addEventListener('close',async()=>{for(const[id,k]of Object.entries(sets))set[k]=typeof DEF[k]==='number'?+$('#'+id).value:$('#'+id).value;set.ponder=$('#sPonder').checked;set.sound=$('#sSound').checked;saveSet();applyTheme();applyPieces();
+ if(!set.ponder){try{await eng.stop()}catch{}}
+ if(!S.busy&&eng.ok){eng.threads=eng.name==='stockfish-19-lite.js'?set.thr:1;try{await eng.stop();await eng.options()}catch{}}render()});
 
 /* ---------- boot ---------- */
 const engLabel=()=>`${eng.name.replace('stockfish-19-','SF19 ').replace('.js','')} · NNUE · ${eng.threads} thread${eng.threads>1?'s':''}`;
 function setChip(t,c){const e=$('#eng');e.textContent=t;e.className='chip '+(c||'')}
-eng.crash=()=>{if(S.busy)return};
-(async()=>{applyTheme();render();setBar(0);
+(async()=>{applyTheme();applyPieces();render();setBar(0);
  if('serviceWorker' in navigator){try{await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
   if(!self.crossOriginIsolated&&!sessionStorage.getItem('uc.coi')){sessionStorage.setItem('uc.coi','1');return location.reload()}}catch(e){console.warn('SW',e)}}
- bootP=eng.start().then(()=>setChip(engLabel(),'ok')).catch(e=>{setChip('Engine unavailable','err');status('The engine could not start in this browser.')});await bootP})();
+ const st=eng.start().then(()=>setChip(engLabel(),'ok')).catch(e=>{setChip('Engine unavailable','err');status('The engine could not start in this browser.')});
+ bootP=st;st.then(bootDone);await st})();
