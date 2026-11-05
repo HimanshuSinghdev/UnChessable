@@ -10,9 +10,10 @@
 <style>
 :root{--bg:#161c2a;--panel:#1d2536;--panel2:#252f45;--line:#33405c;--tx:#e8ebf2;--mu:#8e9ab2;--ac:#d9b45b;--good:#6fbf8e;--bad:#e0645c;
 --lt:#aab6cc;--dk:#4a5d80;--ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
---bs:min(calc(100vh - 110px),calc(100vw - 480px))}
-[data-theme=emerald]{--lt:#cfd8c8;--dk:#5f8a6e}
-[data-theme=wood]{--lt:#ecd2a4;--dk:#a8743f}
+--bs:min(calc(100vh - 124px),calc(100vw - 500px));--frame:#2b3552;--grain:.14;
+--tex:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .18 0 0 0 0 .08 0 0 0 1.1 -.3'/%3E%3C/filter%3E%3Crect width='800' height='800' filter='url(%23g)'/%3E%3C/svg%3E")}
+[data-theme=emerald]{--lt:#cfd8c8;--dk:#5f8a6e;--frame:#2c4638}
+[data-theme=wood]{--lt:#ecd2a4;--dk:#a8743f;--frame:#4a2f18;--grain:.55}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 var(--ui)}
 header{display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--line)}
@@ -24,17 +25,20 @@ button:hover{border-color:var(--ac)}button.pri{background:var(--ac);color:#1a140
 .chip{font-size:13px;color:var(--mu);border:1px solid var(--line);border-radius:99px;padding:3px 10px}
 .chip.ok{color:var(--good)}.chip.err{color:var(--bad)}
 main{display:flex;gap:20px;padding:16px 20px;justify-content:center;align-items:flex-start}
-.bw{display:flex;gap:10px}
+.bw{display:flex;gap:22px;padding:9px}
 #bar{width:26px;height:var(--bs);background:#0e1320;border-radius:5px;position:relative;overflow:hidden;border:1px solid var(--line)}
 #barw{position:absolute;left:0;right:0;bottom:0;height:50%;background:#eceff5;transition:height .35s}
 #barl{position:absolute;left:0;right:0;font-size:11px;text-align:center;font-weight:700;mix-blend-mode:difference;color:#fff}
-#board{width:var(--bs);height:var(--bs);position:relative;touch-action:none;user-select:none;border-radius:4px;overflow:hidden;
-background:repeating-conic-gradient(var(--dk) 0 25%,var(--lt) 0 50%) 0 0/25% 25%;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+#board{width:var(--bs);height:var(--bs);position:relative;touch-action:none;user-select:none;border-radius:2px;overflow:hidden;
+background:repeating-conic-gradient(var(--dk) 0 25%,var(--lt) 0 50%) 0 0/25% 25%;
+box-shadow:0 0 0 8px var(--frame),0 0 0 9px rgba(0,0,0,.5),0 26px 50px rgba(0,0,0,.5)}
+#board::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--grain);mix-blend-mode:multiply;background:var(--tex) 0 0/100% 100%}
+#board::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:8;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35),inset 0 0 24px rgba(0,0,0,.22)}
 #board svg.ly{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #pcs{position:absolute;inset:0}
-.pc{position:absolute;left:0;top:0;width:12.5%;height:12.5%;will-change:transform;cursor:grab}
-.pc svg{width:100%;height:100%;display:block;pointer-events:none}
-.pc.drag{z-index:9;cursor:grabbing;transition:none}
+.pc{position:absolute;left:0;top:0;width:12.5%;height:12.5%;will-change:transform;cursor:grab;background:center/100% no-repeat;filter:drop-shadow(0 2px 1.5px rgba(0,0,0,.42))}
+.pc.drag{z-index:9;cursor:grabbing;transition:none;filter:drop-shadow(0 9px 6px rgba(0,0,0,.45))}
+.pi{width:100%;height:100%;background:center/contain no-repeat}
 @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.9}}.chk{animation:pulse 1.2s infinite}
 aside{width:380px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;max-height:calc(var(--bs) + 4px);overflow:auto}
 #status{font:600 18px/1.25 var(--serif)}
@@ -56,9 +60,10 @@ dialog label{display:flex;justify-content:space-between;align-items:center;gap:1
 select,input[type=number],textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
 textarea{width:100%;height:150px;font:12px ui-monospace,Menlo,monospace}
 .g{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
-#promo{display:flex;gap:8px}#promo button{width:64px;height:64px;padding:2px}#promo svg{width:100%;height:100%}
+#promo{display:flex;gap:8px}#promo button{width:72px;height:72px;padding:2px}
 [hidden]{display:none!important}
-@media(max-width:900px){:root{--bs:min(calc(100vw - 64px),70vh)}main{flex-direction:column;align-items:center;padding:10px}aside{max-height:none;width:calc(var(--bs) + 36px)}}
+@media(max-width:900px){:root{--bs:min(calc(100vw - 96px),70vh)}.bw{gap:14px;padding:9px}main{flex-direction:column;align-items:center;padding:10px}aside{max-height:none;width:calc(var(--bs) + 36px)}}
+@media(max-width:600px){header{flex-wrap:wrap;gap:8px;padding:8px 12px}h1{font-size:22px;flex:1 1 100%}button{padding:6px 10px}.chip{font-size:12px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -79,7 +84,7 @@ textarea{width:100%;height:150px;font:12px ui-monospace,Menlo,monospace}
     <section id="pPlay" class="row" style="flex-direction:column;align-items:stretch">
       <div class="row">
         <select id="side" aria-label="Your colour"><option value="w">Play White</option><option value="b">Play Black</option></select>
-        <button id="bNew" class="pri">New game</button><button id="bUndo">Undo</button><button id="bFlip">Flip</button><button id="bHint">Hint</button>
+        <button id="bNew" class="pri">New game</button><button id="bUndo">Undo</button><button id="bFlip">Flip</button><button id="bHint">Hint</button><button id="bGo" class="pri" hidden>Engine move</button>
       </div>
       <div id="line"></div>
     </section>
@@ -98,7 +103,8 @@ textarea{width:100%;height:150px;font:12px ui-monospace,Menlo,monospace}
 <dialog id="dSet"><form method="dialog">
   <h2 style="font-family:var(--serif);margin-top:0">Settings</h2>
   <label>Board<select id="sTheme"><option value="midnight">Midnight dark</option><option value="emerald">Emerald slate</option><option value="wood">Warm wood</option></select></label>
-  <label>Engine move time<select id="sTime"><option value="500">0.5 s</option><option value="1500">1.5 s</option><option value="4000">4 s</option><option value="10000">10 s</option></select></label>
+  <label>Pieces<select id="sPieces"><option value="merida">Staunton</option><option value="cburnett">Classic</option></select></label>
+  <label>Engine move time<select id="sTime"><option value="500">0.5 s</option><option value="1500">1.5 s</option><option value="3000">3 s</option><option value="6000">6 s</option><option value="12000">12 s</option></select></label>
   <label>Hash<select id="sHash"><option>32</option><option>64</option><option>128</option><option>256</option></select></label>
   <label>Threads <input id="sThr" type="number" min="1" max="32" style="width:70px"></label>
   <label>Review depth<select id="sDepth"><option>12</option><option>14</option><option>16</option><option>18</option></select></label>

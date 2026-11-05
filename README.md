@@ -16,7 +16,7 @@ Serve the folder over HTTP(S) (service workers do not run from `file://`):
 ## What's inside
 - Stockfish 19 lite NNUE (multi-thread → single-thread → asm.js fallback chain), in a Web Worker, Skill 20, configurable Hash/Threads, pondering with `ponderhit`.
 - `chess.js` is the sole rules authority; input is locked while the engine thinks.
-- Built-in opening book (29 mainlines, JSON/SAN), SVG pieces, 3 board themes, arrows (right-drag; Shift/Ctrl/Alt change colour) and square highlights, Web Audio synthesized sounds.
+- Built-in opening book (29 mainlines, JSON/SAN), SVG pieces (Staunton and Classic sets), 3 board themes, arrows (right-drag; Shift/Ctrl/Alt change colour) and square highlights, Web Audio synthesized sounds.
 - Review: per-ply analysis cached in IndexedDB by FEN+depth, move classification (Brilliant → Blunder), harmonic-mean accuracy, eval graph, ←/→ navigation, best line and refutation lines as clickable branches.
 - PGN vault (IndexedDB), PGN/FEN import and copy.
 
@@ -24,3 +24,5 @@ Serve the folder over HTTP(S) (service workers do not run from `file://`):
 The repo ships the *lite* network (~1.7 MB) because the full one is ~99 MB (too big for GitHub/PWA caching). To use it, copy `stockfish-19.js` + `stockfish-19.wasm` (or `-single`) from the `stockfish` npm package into `engine/` and put that filename first in `Engine.start()` in `app.js`. Use Git LFS or Cloudflare Pages for the 99 MB file.
 
 Stockfish is GPL-3.0 (see `engine/GPL-3.0-Stockfish.txt`).
+
+Piece art: `pieces/merida` (Armando Hernandez Marroquin) and `pieces/cburnett` (Colin M.L. Burnett), both GPLv2+, taken from the lichess piece sets.
