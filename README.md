@@ -26,3 +26,5 @@ The repo ships the *lite* network (~1.7 MB) because the full one is ~99 MB (too 
 Stockfish is GPL-3.0 (see `engine/GPL-3.0-Stockfish.txt`).
 
 Piece art: `pieces/merida` (Armando Hernandez Marroquin) and `pieces/cburnett` (Colin M.L. Burnett), both GPLv2+, taken from the lichess piece sets.
+
+Font: Archivo (variable, OFL 1.1) in `fonts/`, bundled so the app works offline.

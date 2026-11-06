@@ -1,127 +1,242 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="slate" data-mode="auto">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>UnChessable</title>
-<meta name="theme-color" content="#161c2a">
+<meta name="theme-color" content="#e6eaef">
+<meta name="color-scheme" content="light dark">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
+<link rel="preload" href="fonts/Archivo-latin-wdth.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-:root{--bg:#161c2a;--panel:#1d2536;--panel2:#252f45;--line:#33405c;--tx:#e8ebf2;--mu:#8e9ab2;--ac:#d9b45b;--good:#6fbf8e;--bad:#e0645c;
---lt:#aab6cc;--dk:#4a5d80;--ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
---bs:min(calc(100vh - 124px),calc(100vw - 500px));--frame:#2b3552;--grain:.14;
---tex:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .18 0 0 0 0 .08 0 0 0 1.1 -.3'/%3E%3C/filter%3E%3Crect width='800' height='800' filter='url(%23g)'/%3E%3C/svg%3E")}
-[data-theme=emerald]{--lt:#cfd8c8;--dk:#5f8a6e;--frame:#2c4638}
-[data-theme=wood]{--lt:#ecd2a4;--dk:#a8743f;--frame:#4a2f18;--grain:.55}
+@font-face{font-family:Archivo;src:url(fonts/Archivo-latin-wdth.woff2) format("woff2");font-weight:100 900;font-stretch:62% 125%;font-display:swap}
+
+/* ---- tokens ---- */
+:root{
+ --bg:#e6eaef;--surface:#f4f6f9;--ink:#141c28;--mute:#566272;--rule:#c5cdd7;
+ --accent:#d93a16;--on-accent:#fff;--good:#1d8a5a;--bad:#d6342c;
+ --track:#26303d;--fill:#f6f8fb;
+ --lt:#dfe5ec;--dk:#7f93aa;
+ --f:Archivo,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+ --bs:min(100vw,calc(100dvh - 300px));
+}
+@media (prefers-color-scheme:dark){:root:not([data-mode=light]){
+ --bg:#1b222c;--surface:#242c38;--ink:#e8ecf2;--mute:#9aa6b5;--rule:#38424f;--accent:#ff7350;--on-accent:#1b222c;--good:#4cc38a;--bad:#ff6a5f;--track:#0f141b;--fill:#e9edf3}}
+:root[data-mode=dark]{
+ --bg:#1b222c;--surface:#242c38;--ink:#e8ecf2;--mute:#9aa6b5;--rule:#38424f;--accent:#ff7350;--on-accent:#1b222c;--good:#4cc38a;--bad:#ff6a5f;--track:#0f141b;--fill:#e9edf3}
+:root[data-theme=sage]{--lt:#eaecd6;--dk:#779556}
+:root[data-theme=walnut]{--lt:#ecd6b0;--dk:#a47749}
+
+/* ---- base ---- */
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 var(--ui)}
-header{display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--line)}
-h1{font:600 26px/1 var(--serif);margin:0 auto 0 0;letter-spacing:.2px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:450 15px/1.4 var(--f);min-height:100dvh;padding-bottom:calc(60px + env(safe-area-inset-bottom))}
 button,select,input,textarea{font:inherit;color:inherit}
-button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
-button:hover{border-color:var(--ac)}button.pri{background:var(--ac);color:#1a1405;border-color:var(--ac);font-weight:600}
-:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-.chip{font-size:13px;color:var(--mu);border:1px solid var(--line);border-radius:99px;padding:3px 10px}
-.chip.ok{color:var(--good)}.chip.err{color:var(--bad)}
-main{display:flex;gap:20px;padding:16px 20px;justify-content:center;align-items:flex-start}
-.bw{display:flex;gap:22px;padding:9px}
-#bar{width:26px;height:var(--bs);background:#0e1320;border-radius:5px;position:relative;overflow:hidden;border:1px solid var(--line)}
-#barw{position:absolute;left:0;right:0;bottom:0;height:50%;background:#eceff5;transition:height .35s}
-#barl{position:absolute;left:0;right:0;font-size:11px;text-align:center;font-weight:700;mix-blend-mode:difference;color:#fff}
-#board{width:var(--bs);height:var(--bs);position:relative;touch-action:none;user-select:none;border-radius:2px;overflow:hidden;
-background:repeating-conic-gradient(var(--dk) 0 25%,var(--lt) 0 50%) 0 0/25% 25%;
-box-shadow:0 0 0 8px var(--frame),0 0 0 9px rgba(0,0,0,.5),0 26px 50px rgba(0,0,0,.5)}
-#board::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--grain);mix-blend-mode:multiply;background:var(--tex) 0 0/100% 100%}
-#board::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:8;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35),inset 0 0 24px rgba(0,0,0,.22)}
+button{cursor:pointer;background:none;border:0;padding:0;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---- header ---- */
+.top{display:flex;align-items:center;gap:4px;height:52px;padding:0 6px 0 16px}
+h1{margin:0 auto 0 0;font:800 26px/1 var(--f);font-stretch:66%;letter-spacing:.01em}
+.chip{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:560;color:var(--mute);margin-right:6px}
+.chip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mute);animation:blink .9s infinite alternate}
+.chip.ok::before{background:var(--good);animation:none}
+.chip.err::before{background:var(--bad);animation:none}
+@keyframes blink{to{opacity:.2}}
+.ibtn{width:44px;height:44px;display:grid;place-items:center;border-radius:50%}
+.ibtn:hover{background:color-mix(in srgb,var(--ink) 10%,transparent)}
+
+/* ---- evaluation ---- */
+.evalrow{position:relative;display:flex;align-items:center;gap:14px;padding:4px 16px 10px}
+#barl{min-width:92px;font:800 42px/1 var(--f);font-stretch:62%;font-variant-numeric:tabular-nums}
+#bar{flex:1;height:12px;background:var(--track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 30%,transparent)}
+#barw{height:100%;width:50%;background:var(--fill);transition:width .5s cubic-bezier(.2,.7,.2,1)}
+#prog{position:absolute;left:0;right:0;bottom:0;height:3px}
+#prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .12s linear}
+
+/* ---- board ---- */
+#board{position:relative;width:var(--bs);height:var(--bs);margin:0 auto;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 28%,transparent);touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;
+ background:repeating-conic-gradient(var(--dk) 0 25%,var(--lt) 0 50%) 0 0/25% 25%}
 #board svg.ly{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #pcs{position:absolute;inset:0}
-.pc{position:absolute;left:0;top:0;width:12.5%;height:12.5%;will-change:transform;cursor:grab;background:center/100% no-repeat;filter:drop-shadow(0 2px 1.5px rgba(0,0,0,.42))}
-.pc.drag{z-index:9;cursor:grabbing;transition:none;filter:drop-shadow(0 9px 6px rgba(0,0,0,.45))}
+.pc{position:absolute;left:0;top:0;width:12.5%;height:12.5%;will-change:transform;cursor:grab;background:center/100% no-repeat;filter:drop-shadow(0 1.5px 1px rgba(0,0,0,.4))}
+.pc.drag{z-index:9;cursor:grabbing;transition:none;filter:drop-shadow(0 8px 5px rgba(0,0,0,.4))}
 .pi{width:100%;height:100%;background:center/contain no-repeat}
 @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.9}}.chk{animation:pulse 1.2s infinite}
-aside{width:380px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;max-height:calc(var(--bs) + 4px);overflow:auto}
-#status{font:600 18px/1.25 var(--serif)}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.tabs button{flex:1;border-radius:0}.tabs button[aria-selected=true]{background:var(--ac);color:#1a1405;font-weight:600}
-#line{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--mu);min-height:3.8em;word-break:break-word}
-#moves{display:grid;grid-template-columns:34px 1fr 1fr;gap:2px;font-size:14px;overflow:auto;min-height:60px}
-#moves span{padding:2px 6px;border-radius:4px}#moves .n{color:var(--mu)}#moves .m{cursor:pointer}#moves .m.cur{background:var(--panel2);outline:1px solid var(--ac)}
-.badge{display:inline-block;min-width:22px;text-align:center;font-size:11px;font-weight:700;border-radius:99px;padding:0 5px;margin-left:6px;color:#101420}
-.c-Brilliant{background:#35c1c8}.c-Best{background:var(--good)}.c-Excellent{background:#9bd17b}.c-Good{background:#b6c3d6}
-.c-Inaccuracy{background:#e6cc5a}.c-Mistake{background:#f0a050}.c-Blunder{background:var(--bad)}
-#graph{width:100%;height:110px;background:#131929;border-radius:6px;cursor:pointer;display:block}
-.acc{display:flex;gap:10px}.acc div{flex:1;background:var(--panel2);border-radius:6px;padding:8px 10px}.acc b{font:600 24px var(--serif);display:block}
-#prog{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden}#prog i{display:block;height:100%;width:0;background:var(--ac)}
-.pv span{display:inline-block;background:var(--panel2);border-radius:4px;padding:1px 7px;margin:2px;cursor:pointer;font-size:13px}.pv span:hover{outline:1px solid var(--ac)}
-dialog{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;width:min(560px,92vw);padding:18px}
-dialog::backdrop{background:rgba(5,8,16,.7)}
-dialog label{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0}
-select,input[type=number],textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
-textarea{width:100%;height:150px;font:12px ui-monospace,Menlo,monospace}
-.g{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
-#promo{display:flex;gap:8px}#promo button{width:72px;height:72px;padding:2px}
-[hidden]{display:none!important}
-@media(max-width:900px){:root{--bs:min(calc(100vw - 96px),70vh)}.bw{gap:14px;padding:9px}main{flex-direction:column;align-items:center;padding:10px}aside{max-height:none;width:calc(var(--bs) + 36px)}}
-@media(max-width:600px){header{flex-wrap:wrap;gap:8px;padding:8px 12px}h1{font-size:22px;flex:1 1 100%}button{padding:6px 10px}.chip{font-size:12px}}
+
+/* ---- status, engine line ---- */
+.statusrow{display:flex;align-items:center;gap:12px;padding:14px 16px 0;min-height:62px}
+#status{flex:1;font:760 30px/1.05 var(--f);font-stretch:70%}
+#bGo{min-height:40px;padding:0 18px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:650}
+#line{padding:2px 16px 10px;color:var(--mute);font-size:13px;font-variant-numeric:tabular-nums;min-height:3em;word-break:break-word}
+
+/* ---- review panel ---- */
+#pRev{display:flex;flex-direction:column;padding:0 16px 6px}
+.verdict{order:1}#graph{order:2}.pv{order:3}.acc{order:4;padding-top:14px}
+.acc{display:flex;gap:30px;padding:6px 0 2px}
+.acc div{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--mute)}
+.acc b{font:800 38px/1 var(--f);font-stretch:62%;color:var(--ink);font-variant-numeric:tabular-nums}
+#graph{display:block;width:100%;height:84px;margin:10px 0 4px;cursor:pointer;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.verdict{display:flex;align-items:center;gap:10px;min-height:44px;font:760 22px/1 var(--f);font-stretch:72%}
+.verdict small{font:450 14px var(--f);color:var(--mute)}
+.pv{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pv .cap{flex:1 0 100%;color:var(--mute);font-size:13px}
+.pv span[data-i]{padding:3px 9px;border:1px solid var(--rule);border-radius:5px;font-size:14px;font-weight:560;cursor:pointer}
+.pv span[data-i]:hover{border-color:var(--accent)}
+
+/* ---- move list ---- */
+#moves{position:relative;display:flex;flex-wrap:wrap;align-content:flex-start;max-height:26dvh;min-height:3.4em;overflow-y:auto;padding:6px 12px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-stretch:88%;font-weight:520;font-variant-numeric:tabular-nums}
+#moves:empty::before{content:"Moves will appear here.";padding:5px 4px;color:var(--mute);font-weight:450}
+#moves span{padding:5px 7px;border-radius:5px}
+#moves .n{color:var(--mute);font-weight:450;padding-right:0;margin-left:6px}
+#moves .m{cursor:pointer}
+#moves .m.cur{background:var(--ink);color:var(--bg)}
+#moves span:empty{display:none}
+.badge{display:inline-block;min-width:20px;margin-left:5px;padding:0 5px;border-radius:99px;font:700 11px/17px var(--f);font-style:normal;text-align:center;color:#101820}
+.c-Brilliant{background:#35c1c8}.c-Best{background:#5fc48c}.c-Excellent{background:#9bd17b}.c-Good{background:#b9c5d6}
+.c-Inaccuracy{background:#e6cc5a}.c-Mistake{background:#f0a050}.c-Blunder{background:#ee6b61}
+
+/* ---- dock (thumb bar) ---- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--rule);padding-bottom:env(safe-area-inset-bottom)}
+.dock .grp{display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
+.dock button{height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:620}
+.dock button:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.dock button.pri{color:var(--accent)}
+body[data-view=rev] #gPlay,body:not([data-view=rev]) #gRev{display:none}
+
+/* ---- dialogs ---- */
+dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:min(520px,100%);max-height:90dvh;border-radius:18px;margin:auto;box-shadow:0 24px 64px rgba(0,0,0,.4)}
+dialog::backdrop{background:rgba(10,14,20,.55)}
+.sheet{padding:20px 20px calc(20px + env(safe-area-inset-bottom))}
+h2{margin:0 0 12px;font:760 28px/1.05 var(--f);font-stretch:70%}
+.mute{color:var(--mute)}
+.field{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:50px;border-top:1px solid var(--rule)}
+.field input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent)}
+select,textarea,input[type=number]{background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:8px 10px;min-height:40px}
+textarea{width:100%;height:140px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+details{border-top:1px solid var(--rule);padding:12px 0 0}summary{cursor:pointer;font-weight:620;min-height:28px}
+.btn{min-height:44px;padding:0 20px;border-radius:999px;border:1.5px solid var(--ink);font-weight:650}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 14px}
+.sides button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px 14px;border-radius:12px;font-weight:700;font-size:16px;border:2px solid transparent}
+.sides button[data-side=w]{background:var(--lt);color:#141c28}
+.sides button[data-side=b]{background:var(--dk);color:#fff}
+.sides button:hover{border-color:var(--accent)}
+.sides .pi{width:72px;height:72px}
+.g{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:48px;border-top:1px solid var(--rule);font-size:14px}
+.g .btn{min-height:36px;padding:0 14px}
+#vMsg{min-height:1.4em;color:var(--bad);font-weight:560;margin:0}
+#promo{display:flex;gap:8px;justify-content:center}
+#promo button{width:76px;height:76px;padding:2px;border-radius:10px;background:var(--lt)}
+#promo button:hover{background:var(--dk)}
+@media(max-width:600px){dialog{margin:auto 0 0;max-width:none;border-radius:18px 18px 0 0}}
+
+/* ---- desktop: board left, ledger right ---- */
+@media(min-width:861px){
+ :root{--bs:min(calc(100vw - 540px),calc(100dvh - 150px),820px)}
+ body{padding-bottom:0}
+ .top{padding:0 24px}
+ .stage{display:grid;grid-template-columns:var(--bs) 400px;gap:36px;justify-content:center;padding:8px 24px 24px}
+ .side{display:flex;flex-direction:column;min-height:0;height:calc(var(--bs) + 58px);overflow:hidden}
+ .statusrow{padding-left:0;padding-right:0;padding-top:4px}#line{padding-left:0;padding-right:0}#pRev{padding-left:0;padding-right:0;overflow:auto}
+ .evalrow{padding-left:0;padding-right:0}
+ .acc{order:0;padding-top:6px}#graph{order:1}.verdict{order:2}.pv{order:3}
+ #moves{display:grid;grid-template-columns:42px 1fr 1fr;align-content:start;flex:1;max-height:none;min-height:80px;overflow-y:auto;padding:6px 0;border-bottom:0}
+ #moves:empty::before{grid-column:1/-1;padding:5px 0}
+ #moves span:empty{display:block}#moves .n{margin-left:0}
+ .dock{position:static;background:none;border-top:1px solid var(--rule);margin-top:auto;padding:0}
+}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body>
-<header>
+<body data-view="play">
+<header class="top">
   <h1>UnChessable</h1>
-  <span id="eng" class="chip">Engine starting…</span>
-  <button id="bVault">PGN vault</button><button id="bSet">Settings</button>
+  <span id="eng" class="chip" role="status">Starting engine</span>
+  <button id="bVault" class="ibtn" aria-label="Saved games and import" title="Saved games">
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v4H4zM6 9v10h12V9M10 13h4"/></svg></button>
+  <button id="bSet" class="ibtn" aria-label="Settings" title="Settings">
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg></button>
 </header>
-<main>
-  <div class="bw">
-    <div id="bar" title="Evaluation"><div id="barw"></div><span id="barl">0.0</span></div>
+
+<main class="stage">
+  <div class="boardcol">
+    <div class="evalrow"><b id="barl">0.0</b><div id="bar" aria-hidden="true"><div id="barw"></div></div><div id="prog" hidden><i></i></div></div>
     <div id="board" role="application" aria-label="Chess board"><svg class="ly" id="under" viewBox="0 0 800 800"></svg><div id="pcs"></div><svg class="ly" id="over" viewBox="0 0 800 800"></svg></div>
   </div>
-  <aside>
-    <div id="status">Your move</div>
-    <div class="row tabs" role="tablist"><button id="tPlay" role="tab" aria-selected="true">Play</button><button id="tRev" role="tab" aria-selected="false">Review</button></div>
-    <section id="pPlay" class="row" style="flex-direction:column;align-items:stretch">
-      <div class="row">
-        <select id="side" aria-label="Your colour"><option value="w">Play White</option><option value="b">Play Black</option></select>
-        <button id="bNew" class="pri">New game</button><button id="bUndo">Undo</button><button id="bFlip">Flip</button><button id="bHint">Hint</button><button id="bGo" class="pri" hidden>Engine move</button>
-      </div>
-      <div id="line"></div>
-    </section>
-    <section id="pRev" hidden style="display:flex;flex-direction:column;gap:10px">
-      <div id="prog" hidden><i></i></div>
-      <div class="acc"><div>White accuracy<b id="accW">–</b></div><div>Black accuracy<b id="accB">–</b></div></div>
-      <svg id="graph" viewBox="0 0 400 110" preserveAspectRatio="none"></svg>
-      <div class="row"><button id="bBest">Best line</button><button id="bWhy">Why is this a mistake?</button><span id="mvInfo" class="chip"></span></div>
+
+  <div class="side">
+    <div class="statusrow"><div id="status" role="status" aria-live="polite">Your move</div><button id="bGo" hidden>Engine move</button></div>
+    <section id="pPlay"><div id="line"></div></section>
+    <section id="pRev" hidden>
+      <div class="acc"><div><b id="accW">–</b>White accuracy</div><div><b id="accB">–</b>Black accuracy</div></div>
+      <svg id="graph" viewBox="0 0 400 110" preserveAspectRatio="none" role="img" aria-label="Evaluation over the game. Tap to jump to a move."></svg>
+      <div class="verdict" id="mvInfo"></div>
       <div class="pv" id="pv"></div>
     </section>
-    <div id="moves"></div>
-    <div class="row"><button id="bRun" class="pri">Review this game</button></div>
-  </aside>
+    <div id="moves" aria-label="Moves"></div>
+
+    <nav class="dock" aria-label="Game controls">
+      <div class="grp" id="gPlay">
+        <button id="bNew"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New game</button>
+        <button id="bUndo"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>Undo</button>
+        <button id="bHint"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Hint</button>
+        <button id="bFlip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v14M3 14l4 4 4-4M17 20V6M13 10l4-4 4 4"/></svg>Flip</button>
+        <button id="bRun"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V11M10 19V5M16 19v-9M21 19H3"/></svg>Review</button>
+      </div>
+      <div class="grp" id="gRev">
+        <button id="tPlay"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M11 6l-6 6 6 6"/></svg>Game</button>
+        <button id="bPrev" aria-label="Previous move"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
+        <button id="bNext" aria-label="Next move"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>Next</button>
+        <button id="bBest"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>Best line</button>
+        <button id="bWhy"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1 1-1.1 1.8M12 17h.01"/></svg>Why?</button>
+      </div>
+    </nav>
+  </div>
 </main>
 
-<dialog id="dSet"><form method="dialog">
-  <h2 style="font-family:var(--serif);margin-top:0">Settings</h2>
-  <label>Board<select id="sTheme"><option value="midnight">Midnight dark</option><option value="emerald">Emerald slate</option><option value="wood">Warm wood</option></select></label>
-  <label>Pieces<select id="sPieces"><option value="merida">Staunton</option><option value="cburnett">Classic</option></select></label>
-  <label>Engine move time<select id="sTime"><option value="500">0.5 s</option><option value="1500">1.5 s</option><option value="3000">3 s</option><option value="6000">6 s</option><option value="12000">12 s</option></select></label>
-  <label>Hash<select id="sHash"><option>32</option><option>64</option><option>128</option><option>256</option></select></label>
-  <label>Threads <input id="sThr" type="number" min="1" max="32" style="width:70px"></label>
-  <label>Review depth<select id="sDepth"><option>12</option><option>14</option><option>16</option><option>18</option></select></label>
-  <label>Pondering<input id="sPonder" type="checkbox"></label>
-  <label>Sound<input id="sSound" type="checkbox"></label>
-  <p id="sNote" style="color:var(--mu);font-size:13px"></p>
-  <button class="pri" value="ok">Done</button>
+<input type="hidden" id="side" value="w">
+
+<dialog id="dNew"><form method="dialog" class="sheet">
+  <h2>New game</h2>
+  <p class="mute" style="margin:0">Choose your colour. Your current game will be replaced.</p>
+  <div class="sides">
+    <button type="button" data-side="w"><span class="pi" data-p="wK"></span>White</button>
+    <button type="button" data-side="b"><span class="pi" data-p="bK"></span>Black</button>
+  </div>
+  <button class="btn" value="x">Cancel</button>
 </form></dialog>
 
-<dialog id="dVault"><form method="dialog">
-  <h2 style="font-family:var(--serif);margin-top:0">PGN vault</h2>
-  <textarea id="vText" placeholder="Paste a PGN or FEN here"></textarea>
-  <div class="row" style="margin:8px 0"><button type="button" id="vImp" class="pri">Import</button><button type="button" id="vPgn">Copy PGN</button><button type="button" id="vFen">Copy FEN</button><button value="x">Close</button></div>
-  <div id="vList" style="max-height:220px;overflow:auto"></div>
+<dialog id="dSet"><form method="dialog" class="sheet">
+  <h2>Settings</h2>
+  <label class="field">Appearance<select id="sMode"><option value="auto">Match my phone</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <label class="field">Board colours<select id="sTheme"><option value="slate">Slate</option><option value="sage">Sage</option><option value="walnut">Walnut</option></select></label>
+  <label class="field">Pieces<select id="sPieces"><option value="merida">Staunton</option><option value="cburnett">Classic</option></select></label>
+  <label class="field">Engine thinking time<select id="sTime"><option value="500">0.5 s</option><option value="1500">1.5 s</option><option value="3000">3 s</option><option value="6000">6 s</option><option value="12000">12 s</option></select></label>
+  <label class="field">Review depth<select id="sDepth"><option value="10">Quick (10)</option><option value="12">Balanced (12)</option><option value="14">Deep (14)</option><option value="16">Thorough (16)</option></select></label>
+  <label class="field">Think on my time<input id="sPonder" type="checkbox"></label>
+  <label class="field">Sound<input id="sSound" type="checkbox"></label>
+  <details><summary>Engine tuning</summary>
+    <label class="field">Memory for the engine (MB)<select id="sHash"><option>32</option><option>64</option><option>128</option><option>256</option></select></label>
+    <label class="field">Threads for play<input id="sThr" type="number" min="1" max="32" style="width:76px"></label>
+    <p id="sNote" class="mute" style="font-size:13px;margin:6px 0 0"></p>
+  </details>
+  <div class="actions"><button class="btn pri" value="ok">Done</button></div>
 </form></dialog>
 
-<dialog id="dPromo"><form method="dialog"><div id="promo"></div></form></dialog>
+<dialog id="dVault"><form method="dialog" class="sheet">
+  <h2>Saved games</h2>
+  <textarea id="vText" placeholder="Paste a PGN or FEN here" aria-label="PGN or FEN"></textarea>
+  <p id="vMsg" role="alert"></p>
+  <div class="actions"><button type="button" id="vImp" class="btn pri">Import</button><button type="button" id="vPgn" class="btn">Copy PGN</button><button type="button" id="vFen" class="btn">Copy FEN</button><button class="btn" value="x">Close</button></div>
+  <div id="vList" style="max-height:34dvh;overflow:auto"></div>
+</form></dialog>
+
+<dialog id="dPromo"><form method="dialog" class="sheet"><div id="promo"></div></form></dialog>
 <script type="module" src="app.js"></script>
 </body>
 </html>
