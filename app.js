@@ -73,20 +73,20 @@ function parseInfo(l){const t=l.split(' '),o={},g=k=>{const i=t.indexOf(k);retur
  const p=t.indexOf('pv');o.pv=p>=0?t.slice(p+1):[];o.nps=+g('nps')||0;return o}
 const BM=/^bestmove (\S+)(?: ponder (\S+))?/;
 class Engine{
- constructor(single=false,hash=null){this.single=single;this.hash=hash;this.waiters=[];this.pond=null;this.quiet=false;this.stm='w';this.onInfo=()=>{};this.lastInfo=null;this.name='';this.threads=1;this.ok=false;this.w=null;this.rp=null}
+ constructor(single=false,hash=null){this.single=single;this.hash=hash;this.waiters=[];this.pond=null;this.quiet=false;this.stm='w';this.onInfo=()=>{};this.lastInfo=null;this.infos={};this.mpv=1;this.name='';this.threads=1;this.ok=false;this.w=null;this.rp=null}
  send(s){if(!this.w)throw new Error('engine not started');this.w.postMessage(s)}
  /* every wait has a timeout, so a dead worker can never leave the game hanging */
  wait(re,ms=0){return new Promise((res,rej)=>{const e={re,res,rej,t:0};if(ms)e.t=setTimeout(()=>{this.waiters=this.waiters.filter(x=>x!==e);rej(new Error('engine timeout'))},ms);this.waiters.push(e)})}
  failAll(err){const w=this.waiters;this.waiters=[];for(const e of w){clearTimeout(e.t);e.rej(err)}}
  line(l){l=String(l);for(const e of this.waiters.slice()){const m=l.match(e.re);if(m){this.waiters=this.waiters.filter(x=>x!==e);clearTimeout(e.t);e.res(m)}}
-  if(!this.quiet&&l.startsWith('info')&&l.includes(' pv ')){const i=parseInfo(l);if(i.score){this.lastInfo=i;this.onInfo(i,this.stm)}}}
+  if(!this.quiet&&l.startsWith('info')&&l.includes(' pv ')){const i=parseInfo(l);if(i.score){this.infos[i.mpv]=i;if(i.mpv===1){this.lastInfo=i;this.onInfo(i,this.stm)}}}}
  async start(){this.ok=false;const c=[];if(!this.single&&self.crossOriginIsolated&&typeof SharedArrayBuffer!=='undefined')c.push('stockfish-19-lite.js');c.push('stockfish-19-lite-single.js','stockfish-19-asm.js');
   for(const f of c){try{await this.spawn('engine/'+f);this.name=f;this.threads=f==='stockfish-19-lite.js'?set.thr:1;await this.options();this.ok=true;return f}catch(e){console.warn('engine fail',f,e);try{this.w.terminate()}catch{}}}
   throw new Error('No engine could start')}
  async spawn(url){const w=this.w=new Worker(url);w.onmessage=e=>this.line(e.data);
   w.onerror=e=>{this.ok=false;this.failAll(new Error(e.message||'engine worker error'))};
   let p=this.wait(/^uciok/,20000);this.send('uci');await p;p=this.wait(/^readyok/,20000);this.send('isready');await p}
- async options(){for(const[k,v]of[['Skill Level',20],['UCI_LimitStrength','false'],['MultiPV',1],['Hash',this.hash??set.hash],['Threads',this.threads],['Move Overhead',20],['Ponder','true']])this.send(`setoption name ${k} value ${v}`);
+ async options(){for(const[k,v]of[['Skill Level',20],['UCI_LimitStrength','false'],['MultiPV',this.mpv],['Hash',this.hash??set.hash],['Threads',this.threads],['Move Overhead',20],['Ponder','true']])this.send(`setoption name ${k} value ${v}`);
   const p=this.wait(/^readyok/,20000);this.send('isready');await p}
  async fresh(){await this.stopPonder();this.send('ucinewgame');const p=this.wait(/^readyok/,10000);this.send('isready');await p}
  pos(fen,moves){return `position fen ${fen}${moves.length?' moves '+moves.join(' '):''}`}
@@ -108,8 +108,8 @@ class Engine{
     else{const p=this.wait(BM,mt+6000);this.send('ponderhit');const m=await p;return{best:m[1],ponder:m[2]}}
    }else await this.stopPonder()}
   this.lastInfo=null;this.quiet=false;const p=this.wait(BM,mt+6000);this.send(this.pos(fen,moves));this.send(`go movetime ${mt}`);const m=await p;return{best:m[1],ponder:m[2]}}
- async analyze(fen,depth){await this.stopPonder();this.stm=fen.split(' ')[1];this.lastInfo=null;const p=this.wait(/^bestmove (\S+)/,120000);this.send(`position fen ${fen}`);this.send(`go depth ${depth}`);const m=await p;
-  const i=this.lastInfo;return{best:m[1]==='(none)'?null:m[1],cp:i?scoreNum(i.score):0,pv:i?i.pv:[],depth}}
+ async analyze(fen,depth){await this.stopPonder();this.stm=fen.split(' ')[1];this.lastInfo=null;this.infos={};const p=this.wait(/^bestmove (\S+)/,120000);this.send(`position fen ${fen}`);this.send(`go depth ${depth}`);const m=await p;
+  const i=this.lastInfo,j=this.infos[2];return{best:m[1]==='(none)'?null:m[1],cp:i?scoreNum(i.score):0,pv:i?i.pv:[],second:j?scoreNum(j.score):null,depth}}
  terminate(){this.ok=false;try{this.w&&this.w.terminate()}catch{}this.failAll(new Error('engine terminated'))}
  restart(){return this.rp||(this.rp=(async()=>{try{this.w&&this.w.terminate()}catch{};this.failAll(new Error('engine restarted'));this.pond=null;this.quiet=false;this.ok=false;try{await this.start()}finally{this.rp=null}})())}
 }
@@ -135,7 +135,8 @@ function arrow(a,b,col,op=.85){const [x1,y1]=sqXY(a),[x2,y2]=sqXY(b),X1=x1*100+5
 const ACOL={n:'#7fbf6a',s:'#e0645c',c:'#4aa3e0',a:'#e6cc5a'};
 function render(){
  const {fen,last}=view(),ch=new Chess(fen),under=$('#under'),over=$('#over'),pcs=$('#pcs');under.innerHTML='';over.innerHTML='';pcs.innerHTML='';
- if(last){under.append(rect(last[0],'#ffd23f',.45),rect(last[1],'#ffd23f',.62))}
+ const qc=S.mode==='review'&&S.rv&&!S.branch&&S.ply>0?S.rv.cls[S.ply-1]:null;
+ if(last){under.append(rect(last[0],'#ffd23f',.45),rect(last[1],qc?CLS[qc.name].c:'#ffd23f',qc?.6:.62))}
  if(S.sel)under.append(rect(S.sel,'#7fbf6a',.45));
  S.ann.sq.forEach(s=>under.append(rect(s.sq,ACOL[s.c],.5)));
  if(ch.inCheck()){const k=ch.board().flat().find(p=>p&&p.type==='k'&&p.color===ch.turn());if(k){const [x,y]=sqXY(k.square),c=document.createElementNS(NS,'circle');c.setAttribute('cx',x*100+50);c.setAttribute('cy',y*100+50);c.setAttribute('r',52);c.setAttribute('fill','#e0645c');c.setAttribute('class','chk');under.append(c)}}
@@ -149,7 +150,7 @@ function render(){
  S.ann.arrows.forEach(a=>over.append(arrow(a.from,a.to,ACOL[a.c])));
  if(S.hint)over.append(arrow(S.hint.slice(0,2),S.hint.slice(2,4),'#6fbf8e',.8));
  if(S.mode==='review'&&S.rv&&!S.branch){const e=S.rv.ev[S.ply];if(e&&e.best)over.append(arrow(e.best.slice(0,2),e.best.slice(2,4),'#6fbf8e',.7));
-}
+ if(qc&&last)over.append(boardBadge(last[1],qc.name))}
  if(S.mode==='play')drawMoves();else drawReview();updateGo();
 }
 function setBar(cp,mate){const p=mate!=null?(mate>0?100:0):wpct(cp);$('#barw').style.width=p+'%';$('#barl').textContent=fmtScore(cp,mate)}
@@ -256,12 +257,12 @@ const terminalEval=(fen,depth)=>{const c=new Chess(fen);if(c.isCheckmate())retur
    single-thread engines in parallel (much faster than one multi-thread engine on tiny searches). */
 async function evalMany(fens,depth,gid,onDone){
  const ev=new Array(fens.length),groups=new Map();let done=0;const total=fens.length;
- await Promise.all(fens.map(async(f,i)=>{const t=terminalEval(f,depth)||await db('evals','readonly',s=>s.get(f+'|'+depth));if(t){ev[i]=t;done++}else(groups.get(f)||groups.set(f,[]).get(f)).push(i)}));
+ await Promise.all(fens.map(async(f,i)=>{const t=terminalEval(f,depth)||await db('evals','readonly',s=>s.get(f+'|'+depth+'|v2'));if(t){ev[i]=t;done++}else(groups.get(f)||groups.set(f,[]).get(f)).push(i)}));
  onDone(done,total);
  const todo=[...groups.keys()];
- const put=(f,r)=>{db('evals','readwrite',s=>s.put(r,f+'|'+depth));for(const i of groups.get(f))ev[i]=r;done+=groups.get(f).length;onDone(done,total)};
+ const put=(f,r)=>{db('evals','readwrite',s=>s.put(r,f+'|'+depth+'|v2'));for(const i of groups.get(f))ev[i]=r;done+=groups.get(f).length;onDone(done,total)};
  if(todo.length){
-  const n=Math.max(1,Math.min(todo.length,4,(navigator.hardwareConcurrency||2)-1)),pool=Array.from({length:n},()=>new Engine(true,16));let next=0;
+  const n=Math.max(1,Math.min(todo.length,4,(navigator.hardwareConcurrency||2)-1)),pool=Array.from({length:n},()=>{const e=new Engine(true,16);e.mpv=2;return e});let next=0;
   try{
    const ok=(await Promise.allSettled(pool.map(p=>p.start()))).map((r,i)=>r.status==='fulfilled'?pool[i]:null).filter(Boolean);
    await Promise.all(ok.map(async w=>{while(next<todo.length&&gid===S.gid){const f=todo[next++];let r;try{r=await w.analyze(f,depth)}catch(e){next--;console.warn('review worker failed',e);return}if(gid!==S.gid)return;put(f,r)}}))}
@@ -281,28 +282,58 @@ async function runReview(){
  for(let i=0;i<hist.length;i++){const a=ev[i],b=ev[i+1],mv=hist[i].color;let best=clamp(a.cp),played=clamp(-b.cp);let cpl=u[i]===a.best?0:Math.max(0,best-played);if(u[i]===a.best)played=best;
   const drop=Math.max(0,wpct(best)-wpct(played));let name;
   let sac=false;if(b.pv&&b.pv[0]){try{const t=new Chess(fens[i+1]);t.move({from:b.pv[0].slice(0,2),to:b.pv[0].slice(2,4),promotion:b.pv[0][4]});sac=mat(fens[i],mv)-mat(t.fen(),mv)>=2.5}catch{}}
-  if(cpl<20&&sac&&played>=-50&&best<700)name='Brilliant';else if(cpl>300||(cpl>150&&drop>=35))name='Blunder';else if(cpl>150)name='Mistake';else if(cpl>65)name='Inaccuracy';else if(cpl>30)name='Good';else if(cpl>15)name='Excellent';else name='Best';
+  const inBook=S.startFen===START&&i<24&&BOOK.some(l=>l.length>i&&hist.slice(0,i+1).every((m,k)=>l[k]===m.san));
+  const only=a.second!=null&&cpl<=10&&best>-400&&wpct(best)-wpct(clamp(a.second))>=14;   // the best move was clearly better than every other
+  if(inBook&&cpl<80)name='Book';else if(cpl<20&&sac&&played>=-50&&best<700)name='Brilliant';else if(only&&best<700)name='Great';
+  else if(cpl>300||(cpl>150&&drop>=35))name='Blunder';else if(cpl>150)name='Mistake';else if(cpl>65)name='Inaccuracy';else if(cpl>30)name='Good';else if(cpl>15)name='Excellent';else name='Best';
+  if(['Inaccuracy','Mistake'].includes(name)&&i>0&&['Mistake','Blunder'].includes(cls[i-1].name)&&cpl>100)name='Miss';   // you did not punish their error
   cls.push({name,cpl,drop});acc[mv].push(Math.max(1,Math.min(100,103.1668*Math.exp(-0.04354*drop)-3.1669)))}
  const hm=a=>a.length?(a.length/a.reduce((s,x)=>s+1/x,0)):0;
  S.rv={fens,ev,hist,ucis:u,cls,acc:{w:hm(acc.w),b:hm(acc.b)}};S.mode='review';S.ply=hist.length;S.branch=null;S.busy=false;S.reviewing=false;$('#prog').hidden=true;
- $('#accW').textContent=S.rv.acc.w.toFixed(1)+'%';$('#accB').textContent=S.rv.acc.b.toFixed(1)+'%';drawGraph();goPly(S.ply)}
-const BADGE={Brilliant:'!!',Best:'★',Excellent:'!',Good:'✓',Inaccuracy:'?!',Mistake:'?',Blunder:'??'};
+ $('#accW').textContent=S.rv.acc.w.toFixed(1)+'%';$('#accB').textContent=S.rv.acc.b.toFixed(1)+'%';drawQual(S.rv);drawGraph();goPly(S.ply)}
+/* ---------- move quality symbols ---------- */
+const SVGI={star:'M12 2l3 6.9 7.5.7-5.7 5 1.7 7.4L12 18.1 5.5 22l1.7-7.4-5.7-5 7.5-.7z',
+ thumb:'M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z',
+ check:'M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z',book:'M12 6.5C10.3 5.2 8 4.8 4 5v12.5c4-.2 6.3.2 8 1.5 1.7-1.3 4-1.7 8-1.5V5c-4-.2-6.3.2-8 1.5z',
+ x:'M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z'};
+const CLS={ // g: glyph or svg key, c: colour, k: ink on that colour, t: name, d: what it means
+ Brilliant:{g:'!!',c:'#1fb5bd',k:'#fff',t:'Brilliant',d:'A sacrifice that still keeps you ahead. Very hard to find.'},
+ Great:{g:'!',c:'#4a8df0',k:'#fff',t:'Great move',d:'The only move that keeps your edge.'},
+ Best:{g:'star',c:'#3fae6a',k:'#fff',t:'Best move',d:'The engine’s first choice.'},
+ Excellent:{g:'thumb',c:'#8bc34a',k:'#14210a',t:'Excellent',d:'Almost as strong as the best move.'},
+ Good:{g:'check',c:'#a9bccf',k:'#14202c',t:'Good',d:'A solid move, though a better one existed.'},
+ Book:{g:'book',c:'#b08968',k:'#fff',t:'Book move',d:'A known opening move.'},
+ Inaccuracy:{g:'?!',c:'#f0c419',k:'#2a2000',t:'Inaccuracy',d:'A small slip that gives up some ground.'},
+ Mistake:{g:'?',c:'#f08a24',k:'#2a1400',t:'Mistake',d:'Gives away a good part of your position.'},
+ Miss:{g:'x',c:'#ee6c4d',k:'#fff',t:'Miss',d:'You missed a chance after your opponent’s slip.'},
+ Blunder:{g:'??',c:'#e53935',k:'#fff',t:'Blunder',d:'A game-changing error.'}};
+const glyph=(n,z=12)=>SVGI[CLS[n].g]?`<svg viewBox="0 0 24 24" width="${z}" height="${z}" aria-hidden="true"><path d="${SVGI[CLS[n].g]}"/></svg>`:CLS[n].g;
+const badge=n=>`<i class="badge" role="img" style="background:${CLS[n].c};color:${CLS[n].k}" aria-label="${CLS[n].t}" title="${CLS[n].t}">${glyph(n)}</i>`;
+function boardBadge(sq,n){const c=CLS[n],[x,y]=sqXY(sq),cx=x*100+73,cy=y*100+27,g=document.createElementNS(NS,'g');g.setAttribute('class','pop');
+ const ink=SVGI[c.g]?`<path d="${SVGI[c.g]}" transform="translate(${cx-13} ${cy-13}) scale(1.08)" fill="${c.k}"/>`:`<text x="${cx}" y="${cy+1}" text-anchor="middle" dominant-baseline="central" font-size="${c.g.length>1?22:27}" font-weight="800" fill="${c.k}" style="font-family:Archivo,system-ui,sans-serif">${c.g}</text>`;
+ g.innerHTML=`<circle cx="${cx}" cy="${cy}" r="21" fill="${c.c}" stroke="#fff" stroke-width="3"/>${ink}`;return g}
+function drawQual(r){const n={};for(const k in CLS)n[k]={w:0,b:0};r.cls.forEach((c,i)=>n[c.name][r.hist[i].color]++);
+ $('#qual').innerHTML=Object.keys(CLS).filter(k=>n[k].w+n[k].b).map(k=>`<div class="qr"><b>${n[k].w}</b><span>${badge(k)}${CLS[k].t.replace(' move','')}</span><b>${n[k].b}</b></div>`).join('')}
 function drawReview(){const r=S.rv;if(!r)return;let o='';const h=r.hist;
- for(let i=0;i<h.length;i+=2){o+=`<span class="n">${i/2+1}.</span>`;for(const j of[i,i+1]){if(!h[j]){o+='<span></span>';continue}o+=`<span class="m ${j+1===S.ply&&!S.branch?'cur':''}" data-p="${j+1}">${h[j].san}${['Brilliant','Inaccuracy','Mistake','Blunder'].includes(r.cls[j].name)?`<i class="badge c-${r.cls[j].name}">${BADGE[r.cls[j].name]}</i>`:''}</span>`}}
+ for(let i=0;i<h.length;i+=2){o+=`<span class="n">${i/2+1}.</span>`;for(const j of[i,i+1]){if(!h[j]){o+='<span></span>';continue}o+=`<span class="m ${j+1===S.ply&&!S.branch?'cur':''}" data-p="${j+1}">${h[j].san}${badge(r.cls[j].name)}</span>`}}
  const mv=$('#moves');mv.innerHTML=o;const cur=mv.querySelector('.cur');if(cur){mv.scrollLeft=cur.offsetLeft-mv.clientWidth/2;mv.scrollTop=cur.offsetTop-mv.clientHeight/2}
- const c=r.cls[S.ply-1];$('#mvInfo').innerHTML=c?`<i class="badge c-${c.name}">${BADGE[c.name]}</i>${c.name==='Best'?'Best move':c.name}${c.cpl>=15?` <small>−${(c.cpl/100).toFixed(1)} pawns</small>`:''}`:'<span class="mute">Start position</span>';$('#bWhy').hidden=!c||!['Inaccuracy','Mistake','Blunder'].includes(c.name);
+ const c=r.cls[S.ply-1];
+ if(!c)$('#mvInfo').innerHTML='<span class="mute">Start position</span>';
+ else{const d=CLS[c.name],pe=r.ev[S.ply-1],bs=pe.best&&r.ucis[S.ply-1]!==pe.best&&c.cpl>=15?pvSan(r.fens[S.ply-1],[pe.best],1)[0]:null;
+  $('#mvInfo').innerHTML=`<span class="vbadge" style="background:${d.c};color:${d.k}">${glyph(c.name,20)}</span><div><b>${d.t}</b><small>${d.d}${c.cpl>=15?` Costs ${(c.cpl/100).toFixed(1)} pawns.`:''}</small>${bs?`<small>Best was <strong>${bs}</strong></small>`:''}</div>`}
+ $('#bWhy').hidden=!c||!['Inaccuracy','Mistake','Miss','Blunder'].includes(c.name);
  const e=r.ev[S.ply],w=S.rv.fens[S.ply].split(' ')[1]==='w'?e.cp:-e.cp,mt=Math.abs(w)>20000;setBar(mt?Math.sign(w)*3000:w,mt?Math.sign(w)*(30000-Math.abs(w)):null);
  drawGraph()}
 function drawGraph(){const r=S.rv,g=$('#graph');if(!r)return;const n=r.fens.length,pts=r.ev.map((e,i)=>{const w=r.fens[i].split(' ')[1]==='w'?e.cp:-e.cp;return[(i/(n-1||1))*400,55-(wpct(w)-50)]});
- const P=pts.map(p=>p.join(',')).join(' '),dot=(c,i)=>`<circle cx="${pts[i+1][0]}" cy="${pts[i+1][1]}" r="3" style="fill:${c.name==='Brilliant'?'#1aa3ad':c.name==='Blunder'?'var(--bad)':'#e08a2e'}"/>`;
+ const P=pts.map(p=>p.join(',')).join(' '),dot=(c,i)=>`<circle cx="${pts[i+1][0]}" cy="${pts[i+1][1]}" r="3.2" style="fill:${CLS[c.name].c}"/>`;
  g.innerHTML=`<path d="M0,55 L${P.replace(/ /g,' L')} L400,55Z" style="fill:var(--accent);opacity:.28"/><polyline points="${P}" fill="none" style="stroke:var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/><line x1="0" x2="400" y1="55" y2="55" style="stroke:var(--mute)" stroke-width="1" vector-effect="non-scaling-stroke" opacity=".6"/>
- ${r.cls.map((c,i)=>['Mistake','Blunder','Brilliant'].includes(c.name)?dot(c,i):'').join('')}
+ ${r.cls.map((c,i)=>['Brilliant','Great','Mistake','Miss','Blunder'].includes(c.name)?dot(c,i):'').join('')}
  <line x1="${pts[S.ply][0]}" x2="${pts[S.ply][0]}" y1="0" y2="110" style="stroke:var(--ink)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`}
 function goPly(p){if(!S.rv)return;S.ply=Math.max(0,Math.min(S.rv.hist.length,p));S.branch=null;$('#pv').innerHTML='';render();const m=S.rv.hist[S.ply-1];if(m)sfx(m.captured?'cap':'move');status(S.ply?`Move ${Math.ceil(S.ply/2)}: ${m.san}`:'Start position')}
 function showPv(fen,pv,label){const san=pvSan(fen,pv,10);$('#pv').innerHTML=`<div class="cap">${label}</div>`+san.map((s,i)=>`<span data-i="${i}">${s}</span>`).join('');
  $('#pv').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;const c=new Chess(fen);let l=null;for(let k=0;k<=+i;k++){const m=c.move({from:pv[k].slice(0,2),to:pv[k].slice(2,4),promotion:pv[k][4]});l=[m.from,m.to]}S.branch={fen:c.fen(),last:l};render();sfx('move')}}
 $('#bBest').onclick=()=>{if(!S.rv)return;const e=S.rv.ev[S.ply];if(e.pv.length)showPv(S.rv.fens[S.ply],e.pv,'Engine best line from here')};
-$('#bWhy').onclick=()=>{if(!S.rv||!S.ply)return;const b=S.rv.ev[S.ply];showPv(S.rv.fens[S.ply],b.pv,`Why ${S.rv.hist[S.ply-1].san} fails — the punishing reply`)};
+$('#bWhy').onclick=()=>{if(!S.rv||!S.ply)return;const b=S.rv.ev[S.ply];showPv(S.rv.fens[S.ply],b.pv,`Why ${S.rv.hist[S.ply-1].san} fails: the punishing reply`)};
 $('#moves').addEventListener('click',e=>{const p=e.target.closest('.m')?.dataset.p;if(p&&S.mode==='review')goPly(+p)});
 $('#graph').addEventListener('click',e=>{if(!S.rv)return;const b=e.currentTarget.getBoundingClientRect();goPly(Math.round((e.clientX-b.left)/b.width*(S.rv.fens.length-1)))});
 addEventListener('keydown',e=>{if(S.mode!=='review'||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
